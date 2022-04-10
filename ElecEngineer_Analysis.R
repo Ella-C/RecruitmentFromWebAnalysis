@@ -44,17 +44,16 @@ for (ii in 2:length(files)){
 }
 
 # Check the length of values before splitting salary
-d <- c()
-v <- c()
+index <- c()
 for (e in 1:dim(df)[1]){
     x <- df[['providesalary_text']][e] %>% str_split('-') %>% unlist
     if(length(x)< 2){
         print(paste(e,x,sep=','))
-        d <- c(d,e)
+        index <- c(index,e)
     }
 }
-v <- rep('0-0',length(d))  # As length discrapency occurred,fill up for same length
-df[['providesalary_text']]<- replace(df[['providesalary_text']],d,v)
+v <- rep('0-0',length(index))  # As length discrapency occurred,fill up for same length
+df[['providesalary_text']]<- replace(df[['providesalary_text']],index,v)
 
 # Extract Min and Max salary to calculate average salary
 df$salaryMin <- df$providesalary_text %>% str_split('-') %>% sapply('[[',1) %>% as.numeric()
