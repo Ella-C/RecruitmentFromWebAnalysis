@@ -25,6 +25,7 @@ for (p in 1:dim(df)[1]){
 df <- df %>% select(-c('jobwelf_list','attribute_text')) # remove columns with list
 df %>% glimpse # check the output
 
+## read the rest html files
 for (ii in 2:length(files)){
     page <- read_html(files[ii],encoding='utf-8')
     if (length(page)==2){

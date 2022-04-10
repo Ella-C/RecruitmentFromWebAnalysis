@@ -1,0 +1,76 @@
+---
+title: "电子工程师薪酬调查小项目之<br >提取HTML数据"
+author: "R派模思"
+date: '2022-04-10'
+output: slidy_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## 工具库准备
+
+```{r libraries}
+library(tidyverse)
+library(showtext)
+showtext_auto()
+library(jsonlite)
+library(rvest)
+```
+
+## 构建文件路径
+
+```{r read_html,echo=TRUE}
+path <- '~/PycharmProjects/WebScraping/Project001/recruitment_engineer/recruitment_engineer/spiders/'
+
+files <- c()
+for (i in 1:70){
+    file <- paste(path,'前程_电子工程师招聘_',i,'.html',sep='')
+    files <- c(files,file)
+    
+}
+print(files[3])
+```
+
+## 构建第一张表
+
+```{r compose_1st_sheet}
+page <- read_html(files[1],encoding = 'utf-8') #读取HTML
+list_js <- page %>% html_elements('script[type="text/javascript"]') %>% html_text() #在HTML中选取包含所需数据的元素
+js <- gsub('\nwindow.__SEARCH_RESULT__ = ','',list_js[4]) #选取json数据
+df <- fromJSON(js)$engine_jds %>% select(c(5,6,9:17,19:22,25,26,28:30)) #将json数据转化为数据表格
+for (p in 1:dim(df)[1]){
+    df[['jobwelf_list1']][p]<- df[['jobwelf_list']][p] %>% unlist %>% toString
+    df[['attribute_text1']][p] <- df[['attribute_text']][p] %>% unlist %>% toString
+} # list数据转化为character方便存入数据库如MySql,MongoDB
+df <- df %>% select(-c('jobwelf_list','attribute_text')) # 移除list数据
+df %>% glimpse #查看结果
+```
+
+## 读取剩余HTML文件数据
+
+```{r read_rest_html}
+for (ii in 2:length(files)){
+    page <- read_html(files[ii],encoding='utf-8')
+    if (length(page)==2){
+        list_js <- page %>% html_elements('script[type="text/javascript"]') %>% html_text()
+        js <- gsub('\nwindow.__SEARCH_RESULT__ = ','',list_js[4])
+        x <- fromJSON(js)$engine_jds %>% select(c(5,6,9:17,19:22,25,26,28:30))
+        for (p in 1:dim(x)[1]){
+            x[['jobwelf_list1']][p]<- x[['jobwelf_list']][p] %>% unlist %>% toString
+            x[['attribute_text1']][p] <- x[['attribute_text']][p] %>% unlist %>% toString
+        }
+        x <- x %>% select(-c('jobwelf_list','attribute_text'))
+        df <- rbind(df,x)
+    } else {
+        print(paste(ii,'Invalid Page with 0B'))
+    }
+}
+print(paste('本次取数',dim(df[1]),'条',sep=''))
+df %>% glimpse
+```
+
+## 结语
+
+至此，我们就将HTML文件数据转化成了数据表格形式，关于数据清洗将在下节展开。在HTML提取数据时，要注意观察HTML文件中各元素所包含的数据，哪些是我们需要的，定位好元素后，就可很快提取出数据。
