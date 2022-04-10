@@ -1,0 +1,173 @@
+---
+title: "电子工程师薪酬调查小项目之<br >清洗HTML数据"
+author: "R派模思"
+date: '2022-04-10'
+output: slidy_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+#### 工具库准备
+
+```{r libraries}
+library(tidyverse)
+library(showtext)
+showtext_auto()
+library(jsonlite)
+library(rvest)
+```
+
+```{r,include=FALSE}
+path <- '~/PycharmProjects/WebScraping/Project001/recruitment_engineer/recruitment_engineer/spiders/'
+
+files <- c()
+for (i in 1:70){
+    file <- paste(path,'前程_电子工程师招聘_',i,'.html',sep='')
+    files <- c(files,file)
+    #print(files[i])
+}
+
+# compose the 1st dataframe
+page <- read_html(files[1],encoding = 'utf-8')  # read html
+list_js <- page %>% html_elements('script[type="text/javascript"]') %>% html_text() # Pick up the elements with desired data
+js <- gsub('\nwindow.__SEARCH_RESULT__ = ','',list_js[4]) # Replace useless strings to read json
+df <- fromJSON(js)$engine_jds %>% select(c(5,6,9:17,19:22,25,26,28:30)) # Select meaningful columns
+for (p in 1:dim(df)[1]){
+    df[['jobwelf_list1']][p]<- df[['jobwelf_list']][p] %>% unlist %>% toString
+    df[['attribute_text1']][p] <- df[['attribute_text']][p] %>% unlist %>% toString
+} # convert list to character as list unable to store in database
+df <- df %>% select(-c('jobwelf_list','attribute_text')) # remove columns with list
+df %>% glimpse # check the output
+
+## read the rest html files
+for (ii in 2:length(files)){
+    page <- read_html(files[ii],encoding='utf-8')
+    if (length(page)==2){
+        list_js <- page %>% html_elements('script[type="text/javascript"]') %>% html_text()
+        js <- gsub('\nwindow.__SEARCH_RESULT__ = ','',list_js[4])
+        x <- fromJSON(js)$engine_jds %>% select(c(5,6,9:17,19:22,25,26,28:30))
+        for (p in 1:dim(x)[1]){
+            x[['jobwelf_list1']][p]<- x[['jobwelf_list']][p] %>% unlist %>% toString
+            x[['attribute_text1']][p] <- x[['attribute_text']][p] %>% unlist %>% toString
+        }
+        x <- x %>% select(-c('jobwelf_list','attribute_text'))
+        df <- rbind(df,x)
+    } else {
+        print(paste(ii,'Invalid Page with 0B'))
+    }
+}
+```
+
+#### 在提取薪酬最大值与最小值前，核对薪酬数据值长度，如长度不同，需要补齐空缺以致长度相同。<br>所以，需要先收集不一致值的Index.
+
+```{r}
+index <- c() #收集不一致值的Index
+for (e in 1:dim(df)[1]){
+    x <- df[['providesalary_text']][e] %>% str_split('-') %>% unlist
+    if(length(x)< 2){
+        print(paste(e,x,sep=','))
+        index <- c(index,e)
+    }
+}
+v <- rep('0-0',length(index))  # 填齐需替补值
+df[['providesalary_text']]<- replace(df[['providesalary_text']],index,v)
+```
+
+#### 提取薪酬最大和最小值
+
+```{r}
+df$salaryMin <- df$providesalary_text %>% str_split('-') %>% sapply('[[',1) %>% as.numeric()
+df$salaryMax <- df$providesalary_text %>% str_split('-') %>% sapply('[[',2) %>% parse_number()
+print('岗位薪酬最大值：')
+df$salaryMax[1:5]
+print('岗位薪酬最小值：')
+df$salaryMin[1:5]
+```
+
+#### 转化薪酬单位，统一为月薪
+
+```{r}
+for (index in grep('万/月',df$providesalary_text)){
+    df$salaryMin[index] <- df$salaryMin[index]*10000
+    df$salaryMax[index] <- df$salaryMax[index]*10000
+}
+for (index in grep('千/月',df$providesalary_text)){
+    df$salaryMin[index] <- df$salaryMin[index]*1000
+    df$salaryMax[index] <- df$salaryMax[index]*1000
+}
+for (index in grep('万/年',df$providesalary_text)){
+    df$salaryMin[index] <- df$salaryMin[index]*10000/12
+    df$salaryMax[index] <- df$salaryMax[index]*10000/12
+}
+df %>% select(c('providesalary_text','salaryMin','salaryMax')) %>% head
+```
+
+#### 计算平均月薪（元）
+
+```{r}
+df$salaryAvg <- round((df$salaryMin+df$salaryMax)/2,0)
+df %>% select(c('providesalary_text','salaryMin','salaryMax','salaryAvg')) %>% head
+```
+
+#### 提取城市数据
+
+```{r}
+df$city <- df$workarea_text %>% str_split('-') %>% sapply('[[',1)
+df %>% select(c('workarea_text','city')) %>% head
+```
+
+#### 从attribute_text1中提取数据，如工作地点，经验，学历等，但须确保每行数据长度至少<br>3以上
+
+```{r,echo=TRUE}
+y <- c()
+for (i in 1:dim(df)[1]){
+   x <-  df$attribute_text1[i] %>% str_split(',') %>% unlist
+   if (length(x) < 3){
+       print(paste(i,x))
+       y <- c(y,i)
+   }
+}
+y1 <- c(539,2368,2704,2748,3278) # 缺少经验和学历
+y2 <- c(306,433,688,898,1138,1753,1761,1817,2567,2672,3216) # 缺少经验
+y3 <- setdiff(y,c(y1,y2)) # 缺少学历
+y3
+```
+
+#### 补齐所缺值，如经验或学历
+
+```{r}
+df$attribute_text1[y1]<- paste(df$attribute_text1[y1],'无需经验','学历不限',sep=',')
+v2 <- c()
+v3 <- c()
+for(i in 1:length(y2)){
+    x <- df$attribute_text1[y2[i]] %>% str_split(',') %>% unlist
+    x <- paste(x[1],'无需经验',x[2],sep=',')
+    v2 <- c(v2,x)
+}
+for(i in 1:length(y3)){
+    x <- df$attribute_text1[y3[i]] %>% str_split(',') %>% unlist
+    x <- paste(x[1],x[2],'学历不限',sep=',')
+    v3 <- c(v3,x)
+}
+df$attribute_text1 <- replace(df$attribute_text1,y2,v2)
+df$attribute_text1 <- replace(df$attribute_text1,y3,v3)
+df %>% select(c('attribute_text1')) %>% head
+```
+
+#### 提取经验和学历，查看表格
+
+```{r}
+df$experience <- df$attribute_text1 %>% str_split(',')%>% sapply('[[',2)
+df$education <- df$attribute_text1 %>% str_split(',')%>% sapply('[[',3)
+df %>% select(c('attribute_text1','city','experience','education')) %>% tail
+```
+
+#### 结语
+
+至此，我们把从HTML中提取的数据清洗了一次，整理出了我们需要的数据。在处理薪酬时，要注意统一单位； 在提取经验和学历时，要注意保持数据结构的一致性。
+
+```{r}
+df %>% select(-c(3:4,6,9:11,13:15,19:20)) %>% head(10)
+```
