@@ -19,3 +19,5 @@
 -   [目标岗位薪酬查询LINK](https://datastudio.google.com/reporting/4c9af49c-9694-4010-91f6-d30befb2eb74)
 -   [目标岗位福利Dashboard](https://datastudio.google.com/reporting/abbd6c07-ea8e-49ea-b502-a2e1e156e97a)
 -   [目标岗位查询器使用说明视频](https://www.bilibili.com/video/BV1jY4y1e7h5?share_source=copy_web)
+
+[![amplifybutton](https://oneclick.amplifyapp.com/button.svg)](https://console.aws.amazon.com/amplify/home#/deploy?repo=https://github.com/Ella-C/RecruitmentFromWebAnalysis)
